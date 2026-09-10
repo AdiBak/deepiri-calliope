@@ -7,6 +7,11 @@ import {
   generatePlan,
   createRecordingSession,
   uploadRecordingFile,
+  commitRapTake,
+  fetchGeneratedDrumsBlob,
+  type CommitRapTakeResult,
+  type RapStyle,
+  type BeatStyle,
   type AamatiComposeResult,
   type GenerateDepth,
   type RouterProvider,
@@ -25,6 +30,7 @@ import { AamatiSteerCard } from "../components/studio/AamatiSteerCard";
 import { StudioTransport, type TransportState } from "../components/studio/StudioTransport";
 import { TimelineView, type TimelineClip } from "../components/studio/TimelineView";
 import { VocalRackPanel } from "../components/studio/VocalRackPanel";
+import { RapSongPathPanel, type RapTempoMode } from "../components/studio/RapSongPathPanel";
 import { VoiceDspPanel } from "../components/studio/VoiceDspPanel";
 import { VocalAIPanel } from "../components/studio/VocalAIPanel";
 import {
@@ -40,7 +46,7 @@ import { SynthEngine, getSharedSynthContext, type SynthConfig, DEFAULT_SYNTH } f
 import { PianoRoll, type PianoNote } from "../components/studio/PianoRoll";
 import { InstrumentTab } from "../components/studio/InstrumentTab";
 import { takeGesturesStudioImport } from "../gestures/studioHandoff";
-import { DEFAULT_VOCAL_RACK, type VocalRackPayload } from "../types/vocalRack";
+import { DEFAULT_VOCAL_RACK, VOCAL_PRESETS, type VocalRackPayload } from "../types/vocalRack";
 import type { AutomationPoint, PluginInstance, RecordingFile } from "../types/audio";
 
 const PROVIDERS: { value: RouterProvider; label: string }[] = [
@@ -79,6 +85,16 @@ type StudioClip = EngineClip & {
 };
 
 const LIVE_CLIP_ID = "clip-live-recording";
+
+const BEAT_STYLE_LABELS: Record<BeatStyle, string> = {
+  hiphop: "Hip-hop",
+  trap: "Trap",
+  boom_bap: "Boom bap",
+  house: "House",
+  garage: "UK garage",
+  lofi: "Lo-fi",
+  breakbeat: "Breakbeat",
+};
 const STORAGE_KEY = "calliope.project.v1";
 
 type ProjectSnapshot = {
@@ -118,6 +134,11 @@ export function Studio() {
   const [recordedSamples, setRecordedSamples] = useState<Float32Array | null>(null);
   const [recordedSampleRate, setRecordedSampleRate] = useState<number>(48000);
   const [lastRecordingFile, setLastRecordingFile] = useState<{ id: string; sessionId: string } | null>(null);
+  const [rapPathBusy, setRapPathBusy] = useState(false);
+  const [rapPathStatus, setRapPathStatus] = useState<string | null>(null);
+  const [rapStyle, setRapStyle] = useState<RapStyle>("melodic_rap");
+  const [rapTempoMode, setRapTempoMode] = useState<RapTempoMode>("auto");
+  const [rapBeatStyle, setRapBeatStyle] = useState<BeatStyle>("hiphop");
   const importInputRef = useRef<HTMLInputElement>(null);
   const liveGrowRef = useRef<number | null>(null);
   const liveStartRef = useRef<{ bar: number; atMs: number } | null>(null);
@@ -439,6 +460,48 @@ export function Studio() {
   }, []);
 
   const vocalTrack = tracks.find((t) => t.type === "vocal");
+
+  const rapTakeTarget = useMemo(() => {
+    const sel = selectedClipId ? clips.find((c) => c.id === selectedClipId) : null;
+    if (sel?.recordingId && sel.recordingId !== "live") {
+      return {
+        clipId: sel.id,
+        recordingId: sel.recordingId,
+        sessionId: sel.sessionId,
+        trackId: sel.trackId,
+        startBar: sel.startBar,
+        label: sel.name,
+      };
+    }
+    if (lastRecordingFile) {
+      const clip = clips.find((c) => c.recordingId === lastRecordingFile.id);
+      return {
+        clipId: clip?.id,
+        recordingId: lastRecordingFile.id,
+        sessionId: lastRecordingFile.sessionId,
+        trackId: clip?.trackId ?? vocalTrack?.id,
+        startBar: clip?.startBar ?? 0,
+        label: clip?.name ?? "Last recording",
+      };
+    }
+    const vocalClip = [...clips]
+      .reverse()
+      .find((c) => {
+        const tr = tracks.find((t) => t.id === c.trackId);
+        return tr?.type === "vocal" && c.recordingId && c.recordingId !== "live";
+      });
+    if (vocalClip) {
+      return {
+        clipId: vocalClip.id,
+        recordingId: vocalClip.recordingId,
+        sessionId: vocalClip.sessionId,
+        trackId: vocalClip.trackId,
+        startBar: vocalClip.startBar,
+        label: vocalClip.name,
+      };
+    }
+    return null;
+  }, [clips, selectedClipId, lastRecordingFile, tracks, vocalTrack?.id]);
 
   const timelineClips: TimelineClip[] = useMemo(
     () =>
@@ -801,6 +864,217 @@ export function Studio() {
     },
     [pushHistory],
   );
+
+  const replaceClipAudio = useCallback(
+    async (
+      clipId: string,
+      newRecordingId: string,
+      sessionId: string,
+      name: string,
+      durationSec: number,
+    ) => {
+      pushHistory("rap-take");
+      let updated: StudioClip | null = null;
+      setClips((prev) =>
+        prev.map((c) => {
+          if (c.id !== clipId) return c;
+          updated = {
+            ...c,
+            sessionId,
+            recordingId: newRecordingId,
+            name,
+            durationSec,
+            waveformPeaks: undefined,
+          };
+          return updated;
+        }),
+      );
+      if (!updated) return;
+      await ensureEngine().loadClip(updated);
+      const peaks = engineRef.current?.getClipPeaks(sessionId, newRecordingId);
+      if (peaks) {
+        setClips((prev) =>
+          prev.map((c) => (c.id === clipId ? { ...c, waveformPeaks: peaks } : c)),
+        );
+      }
+    },
+    [pushHistory],
+  );
+
+  const processRapTake = useCallback(async (): Promise<CommitRapTakeResult | null> => {
+    const target = rapTakeTarget;
+    if (!target) return null;
+    setRapPathStatus(null);
+    const preset = VOCAL_PRESETS.dry_rap_punch;
+    setVocalRack(preset);
+    const result = await commitRapTake(target.sessionId, target.recordingId, {
+      vocalRack: preset,
+      style: rapStyle,
+      targetBpm: Math.round(bpm),
+      forceTargetBpm: rapTempoMode === "studio",
+      snapToTempo: true,
+      trimLeadingSilence: true,
+    });
+    const name = `${target.label.replace(/\.[^.]+$/, "")} (autotuned).wav`;
+    if (target.clipId) {
+      await replaceClipAudio(
+        target.clipId,
+        result.recording_id,
+        target.sessionId,
+        name,
+        result.duration_sec,
+      );
+    } else {
+      const trackId = target.trackId ?? vocalTrack?.id;
+      if (!trackId) throw new Error("No vocal track");
+      placeClipFromFile(
+        {
+          id: result.recording_id,
+          filename: result.filename,
+          original_name: name,
+          format: "wav",
+          duration_sec: result.duration_sec,
+          track_type: "vocal",
+          uploaded_at: new Date().toISOString(),
+        },
+        target.sessionId,
+        trackId,
+        target.startBar ?? 0,
+        result.duration_sec,
+      );
+    }
+    setLastRecordingFile({ id: result.recording_id, sessionId: target.sessionId });
+    return result;
+  }, [rapTakeTarget, rapStyle, rapTempoMode, bpm, replaceClipAudio, placeClipFromFile, vocalTrack?.id]);
+
+  const addBeatToTimeline = useCallback(
+    async (opts?: { bpm?: number; durationSec?: number; startBar?: number; genre?: BeatStyle }) => {
+      const useBpm = opts?.bpm ?? bpm;
+      const startBar = Math.max(0, opts?.startBar ?? 0);
+      const genre = opts?.genre ?? rapBeatStyle;
+      const barSec = (60 / useBpm) * 4;
+      const durationBars = opts?.durationSec
+        ? Math.max(4, Math.min(64, Math.ceil(opts.durationSec / barSec)))
+        : 16;
+      const blob = await fetchGeneratedDrumsBlob(useBpm, durationBars, genre);
+      if (!sessionIdRef.current) {
+        const s = await createRecordingSession(`Session ${new Date().toLocaleTimeString()}`);
+        sessionIdRef.current = s.id;
+      }
+      const sessionId = sessionIdRef.current!;
+      const beatLabel = BEAT_STYLE_LABELS[genre] ?? genre;
+      const file = new File([blob], `${genre}-beat.wav`, { type: "audio/wav" });
+      const drumsTrack = tracksRef.current.find((t) => t.type === "drum") ?? tracksRef.current[0];
+      if (!drumsTrack) throw new Error("No drums track");
+      const result = await uploadRecordingFile(sessionId, file, "drum");
+      const durationSec = result.duration_sec > 0 ? result.duration_sec : durationBars * barSec;
+      pushHistory("beat");
+      setClips((prev) =>
+        prev.filter((c) => !(c.trackId === drumsTrack.id && c.startBar === startBar)),
+      );
+      placeClipFromFile(
+        {
+          id: result.recording_id,
+          filename: result.filename,
+          original_name: `${beatLabel} beat.wav`,
+          format: "wav",
+          duration_sec: durationSec,
+          track_type: "drum",
+          uploaded_at: new Date().toISOString(),
+        },
+        sessionId,
+        drumsTrack.id,
+        startBar,
+        durationSec,
+      );
+      return { startBar, genre: beatLabel, durationSec };
+    },
+    [bpm, rapBeatStyle, placeClipFromFile, pushHistory],
+  );
+
+  const onMakeRapTake = useCallback(async () => {
+    setRapPathBusy(true);
+    setRapPathStatus(null);
+    try {
+      const result = await processRapTake();
+      if (!result) return;
+      const conf = result.bpm_confidence ?? 0;
+      const det =
+        result.detected_bpm != null && conf > 0.12
+          ? ` Detected ~${Math.round(result.detected_bpm)} BPM${conf > 0.25 ? "" : " (low confidence)"}.`
+          : " Tempo unclear — use the metronome next time for a tighter match.";
+      const stretchNote = result.stretched ? " Vocal stretched to beat tempo." : "";
+      setPlayHint("Autotuned rap take is on the timeline — hit Play, then Export.");
+      setRapPathStatus(`Autotuned take ready.${det}${stretchNote}`);
+    } catch (e) {
+      setRapPathStatus(e instanceof Error ? e.message : String(e));
+      if (String(e).includes("404") || String(e).includes("Session not found")) {
+        setPlayHint("Session expired after server reload — record or import your vocal again.");
+      }
+    } finally {
+      setRapPathBusy(false);
+    }
+  }, [processRapTake]);
+
+  const onAddBeat = useCallback(async () => {
+    setRapPathBusy(true);
+    setRapPathStatus(null);
+    try {
+      const startBar = Math.max(0, transport.bar - 1);
+      const placed = await addBeatToTimeline({ startBar, genre: rapBeatStyle });
+      setPlayHint(`Beat on Drums at bar ${(placed?.startBar ?? startBar) + 1} — play and Export when ready.`);
+      setRapPathStatus(`${BEAT_STYLE_LABELS[rapBeatStyle]} beat at bar ${(placed?.startBar ?? startBar) + 1}.`);
+    } catch (e) {
+      setRapPathStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRapPathBusy(false);
+    }
+  }, [addBeatToTimeline, rapBeatStyle, transport.bar]);
+
+  const onMakeRapSong = useCallback(async () => {
+    setRapPathBusy(true);
+    setRapPathStatus(null);
+    try {
+      const result = await processRapTake();
+      if (!result) return;
+      const conf = result.bpm_confidence ?? 0;
+      const applied =
+        result.applied_bpm != null
+          ? Math.round(Math.min(200, Math.max(60, result.applied_bpm)))
+          : bpm;
+      if (applied !== bpm) setBpm(applied);
+      const beatStartBar = rapTakeTarget?.startBar ?? 0;
+      const placed = await addBeatToTimeline({
+        bpm: applied,
+        durationSec: result.duration_sec,
+        startBar: beatStartBar,
+        genre: rapBeatStyle,
+      });
+      const confNote =
+        result.detected_bpm != null
+          ? conf > 0.25
+            ? `detected ~${Math.round(result.detected_bpm)}`
+            : `weak detect ~${Math.round(result.detected_bpm)}`
+          : "no detect";
+      const stretchNote = result.stretched ? ", vocal stretched" : "";
+      const trimNote =
+        result.trimmed_leading_sec && result.trimmed_leading_sec > 0.05
+          ? `, trimmed ${result.trimmed_leading_sec.toFixed(2)}s lead-in`
+          : "";
+      const barNote = (placed?.startBar ?? beatStartBar) + 1;
+      setPlayHint(`Rap song ready at ${applied} BPM, bar ${barNote} — play the timeline and Export.`);
+      setRapPathStatus(
+        `${BEAT_STYLE_LABELS[rapBeatStyle]} beat + vocal at bar ${barNote} (${confNote}${stretchNote}${trimNote}).`,
+      );
+    } catch (e) {
+      setRapPathStatus(e instanceof Error ? e.message : String(e));
+      if (String(e).includes("404") || String(e).includes("Session not found")) {
+        setPlayHint("Session expired after server reload — record or import your vocal again.");
+      }
+    } finally {
+      setRapPathBusy(false);
+    }
+  }, [processRapTake, addBeatToTimeline, bpm, rapBeatStyle, rapTakeTarget?.startBar]);
 
   // Gestures → Studio: place the conducted take on an audio track at bar 1
   useEffect(() => {
@@ -1348,6 +1622,26 @@ export function Studio() {
           <div className="daw-inspector__content">
             {inspectorTab === "vocal" && (
               <>
+                <RapSongPathPanel
+                  targetLabel={rapTakeTarget?.label ?? null}
+                  targetStartBar={rapTakeTarget?.startBar ?? null}
+                  canProcess={rapTakeTarget != null}
+                  busy={rapPathBusy}
+                  status={rapPathStatus}
+                  style={rapStyle}
+                  onStyleChange={setRapStyle}
+                  beatStyle={rapBeatStyle}
+                  onBeatStyleChange={setRapBeatStyle}
+                  tempoMode={rapTempoMode}
+                  onTempoModeChange={setRapTempoMode}
+                  studioBpm={Math.round(bpm)}
+                  playheadBar={transport.bar}
+                  metronomeOn={metronomeOn}
+                  onToggleMetronome={onToggleMetronome}
+                  onMakeRapSong={() => void onMakeRapSong()}
+                  onMakeRapTake={() => void onMakeRapTake()}
+                  onAddBeat={() => void onAddBeat()}
+                />
                 <VocalRackPanel
                   value={vocalRack}
                   onChange={setVocalRack}
