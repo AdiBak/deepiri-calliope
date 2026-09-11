@@ -45,7 +45,7 @@ import { downloadBlob, encodeWav } from "../audio/exportWav";
 import { SynthEngine, getSharedSynthContext, type SynthConfig, DEFAULT_SYNTH } from "../audio/synthEngine";
 import { PianoRoll, type PianoNote } from "../components/studio/PianoRoll";
 import { InstrumentTab } from "../components/studio/InstrumentTab";
-import { takeGesturesStudioImport } from "../gestures/studioHandoff";
+import { clearGesturesStudioImport, peekGesturesStudioImport } from "../gestures/studioHandoff";
 import { DEFAULT_VOCAL_RACK, VOCAL_PRESETS, type VocalRackPayload } from "../types/vocalRack";
 import type { AutomationPoint, PluginInstance, RecordingFile } from "../types/audio";
 
@@ -414,8 +414,15 @@ export function Studio() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      if (target?.isContentEditable) return;
+      const tag = target?.tagName;
+      const inTextField =
+        tag === "TEXTAREA" ||
+        Boolean(target?.isContentEditable) ||
+        (tag === "INPUT" &&
+          !["checkbox", "radio", "button", "range", "submit"].includes(
+            (target as HTMLInputElement).type || "text",
+          ));
+      if (inTextField) return;
       if (e.code === "Space") {
         e.preventDefault();
         if (e.shiftKey) onStopRef.current();
@@ -1076,10 +1083,16 @@ export function Studio() {
     }
   }, [processRapTake, addBeatToTimeline, bpm, rapBeatStyle, rapTakeTarget?.startBar]);
 
-  // Gestures → Studio: place the conducted take on an audio track at bar 1
+  // Gestures → Studio: place the conducted take on the Synth/lead lane at bar 1.
+  // Peek (don't consume) sessionStorage: React Strict Mode remounts Studio and would
+  // otherwise drop the payload before clips survive into the visible tree.
   useEffect(() => {
-    const incoming = takeGesturesStudioImport();
+    const incoming = peekGesturesStudioImport();
     if (!incoming) return;
+    if (clipsRef.current.some((c) => c.recordingId === incoming.recordingId)) {
+      clearGesturesStudioImport();
+      return;
+    }
 
     const audioTrack =
       tracksRef.current.find((t) => t.type === "lead") ??
@@ -1088,18 +1101,23 @@ export function Studio() {
       tracksRef.current[0];
     if (!audioTrack) return;
 
+    const durationSec = Math.max(incoming.durationSec || 0, 1);
     const file: RecordingFile = {
       id: incoming.recordingId,
       filename: incoming.name,
       original_name: incoming.name,
       format: "wav",
-      duration_sec: incoming.durationSec,
+      duration_sec: durationSec,
       track_type: "audio",
       uploaded_at: new Date().toISOString(),
     };
-    placeClipFromFile(file, incoming.sessionId, audioTrack.id, 0, incoming.durationSec);
+    placeClipFromFile(file, incoming.sessionId, audioTrack.id, 0, durationSec);
+    sessionIdRef.current = incoming.sessionId;
     setSelectedTrackId(audioTrack.id);
-    setPlayHint(`Imported from Gestures: ${incoming.scoreLabel ?? incoming.name}`);
+    setPlayHint(`Imported from Gestures onto ${audioTrack.name}: ${incoming.scoreLabel ?? incoming.name}`);
+
+    const t = window.setTimeout(() => clearGesturesStudioImport(), 600);
+    return () => window.clearTimeout(t);
   }, [placeClipFromFile]);
 
   // Instrument clip placement from PianoRoll selection
@@ -1517,6 +1535,7 @@ export function Studio() {
               selectedClipId={selectedClipId}
               onSeek={(bar) => void onSeekBar(bar)}
               onClipMove={onClipMove}
+              onDeleteClip={onDeleteClip}
             />
           </div>
 

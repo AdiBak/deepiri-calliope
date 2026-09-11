@@ -37,6 +37,7 @@ type TimelineViewProps = {
   onSeek?: (bar: number) => void;
   /** Move a clip to a new start bar / track (0-based bar). */
   onClipMove?: (clipId: string, newTrackId: string, newStartBar: number) => void;
+  onDeleteClip?: (clipId: string) => void;
 };
 
 function ClipWaveform({
@@ -104,6 +105,7 @@ export function TimelineView({
   selectedClipId,
   onSeek,
   onClipMove,
+  onDeleteClip,
 }: TimelineViewProps) {
   const [dragOverTrack, setDragOverTrack] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
@@ -211,12 +213,14 @@ export function TimelineView({
   }, [dragging, onClipMove, clips, durationBars, trackIdAtY, finishDrag]);
 
   const onClipPointerDown = (clip: TimelineClip, e: ReactPointerEvent<HTMLButtonElement>) => {
+    (e.currentTarget as HTMLElement).focus();
     if (!onClipMove || e.button !== 0) {
       onSelectClip?.(clip.id);
       return;
     }
     e.preventDefault();
     e.stopPropagation();
+    (e.currentTarget as HTMLElement).focus();
     onSelectClip?.(clip.id);
     const next: DragState = {
       clipId: clip.id,
@@ -319,6 +323,12 @@ export function TimelineView({
                           onSelectClip?.(clip.id);
                         }}
                         onPointerDown={(ev) => onClipPointerDown(clip, ev)}
+                        onKeyDown={(ev) => {
+                          if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          onDeleteClip?.(clip.id);
+                        }}
                         className={`daw-timeline__clip daw-timeline__clip--audio has-wave${selectedClipId === clip.id ? " is-selected" : ""}${isDragClip && dragging.moved ? " is-dragging" : ""}`}
                       >
                         <span className="daw-clip-name">{clip.name.replace(/\.[^.]+$/, "")}</span>
