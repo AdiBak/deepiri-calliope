@@ -299,6 +299,62 @@ def _teacher_rows(n_songs: int, rng: np.random.Generator) -> tuple[list[np.ndarr
     return xs, ys
 
 
+def holdout_indices(
+    n_songs: int,
+    rng: np.random.Generator,
+    *,
+    fraction: float | None = None,
+) -> set[int]:
+    """Song indices reserved for evaluation.
+
+    The trainer holds out ``min(50, n // 20)`` songs once ``n >= 40``, and
+    still draws a permutation when nothing is held out so later random draws
+    stay on the same stream. ``fraction`` is the report split (for example
+    0.2) and always leaves at least one song in train when ``n > 1``.
+    """
+    if n_songs <= 0:
+        return set()
+    if fraction is None:
+        n_hold = min(50, n_songs // 20) if n_songs >= 40 else 0
+    else:
+        if not 0.0 < fraction < 1.0:
+            raise ValueError("fraction must be between 0 and 1")
+        n_hold = int(round(float(fraction) * n_songs))
+        n_hold = min(max(n_hold, 1), n_songs - 1)
+    order = rng.permutation(n_songs)
+    if n_hold <= 0:
+        return set()
+    return {int(i) for i in order[:n_hold]}
+
+
+def fit_mlp_weights(x: np.ndarray, y: np.ndarray) -> tuple[dict[str, np.ndarray], int]:
+    """Fit the 12→64→32→2 ReLU network used for interval and duration."""
+    from sklearn.neural_network import MLPRegressor
+
+    y = np.asarray(y)
+    if y.ndim == 1:
+        y = np.stack([y, np.zeros_like(y)], axis=1)
+    mlp = MLPRegressor(
+        hidden_layer_sizes=(64, 32),
+        activation="relu",
+        solver="adam",
+        max_iter=250,
+        random_state=7,
+        early_stopping=True,
+        n_iter_no_change=20,
+    )
+    mlp.fit(x, y)
+    weights = {
+        "w1": mlp.coefs_[0].astype(np.float32),
+        "b1": mlp.intercepts_[0].astype(np.float32),
+        "w2": mlp.coefs_[1].astype(np.float32),
+        "b2": mlp.intercepts_[1].astype(np.float32),
+        "w3": mlp.coefs_[2].astype(np.float32),
+        "b3": mlp.intercepts_[2].astype(np.float32),
+    }
+    return weights, int(np.max(mlp.n_iter_))
+
+
 def train_and_save(
     path: Path | None = None,
     n_songs: int = 480,
@@ -312,8 +368,6 @@ def train_and_save(
     each song's key). Mixes in synthetic teacher songs so genre/arrangement
     features stay useful. Holds out songs for interval/duration MAE.
     """
-    from sklearn.neural_network import MLPRegressor
-
     from calliope.audio.lieder_melody import iter_parsed_songs, lieder_feature_rows
 
     rng = np.random.default_rng(7)
@@ -325,9 +379,7 @@ def train_and_save(
     if root.is_dir():
         songs = iter_parsed_songs(root)
         n_lieder = len(songs)
-        n_hold = min(50, len(songs) // 20) if len(songs) >= 40 else 0
-        order = rng.permutation(len(songs))
-        hold_idx = set(int(i) for i in order[:n_hold])
+        hold_idx = holdout_indices(len(songs), rng)
         for i, song in enumerate(songs):
             fx, fy = lieder_feature_rows(song.notes, root=song.root, scale=song.scale)
             if not fx:
@@ -347,26 +399,7 @@ def train_and_save(
         raise RuntimeError("no vocal melody training rows")
     x = np.stack(xs).astype(np.float32)
     y = np.stack(ys).astype(np.float32)
-    if y.ndim == 1:
-        y = np.stack([y, np.zeros_like(y)], axis=1)
-    mlp = MLPRegressor(
-        hidden_layer_sizes=(64, 32),
-        activation="relu",
-        solver="adam",
-        max_iter=250,
-        random_state=7,
-        early_stopping=True,
-        n_iter_no_change=20,
-    )
-    mlp.fit(x, y)
-    w = {
-        "w1": mlp.coefs_[0].astype(np.float32),
-        "b1": mlp.intercepts_[0].astype(np.float32),
-        "w2": mlp.coefs_[1].astype(np.float32),
-        "b2": mlp.intercepts_[1].astype(np.float32),
-        "w3": mlp.coefs_[2].astype(np.float32),
-        "b3": mlp.intercepts_[2].astype(np.float32),
-    }
+    w, _n_iter = fit_mlp_weights(x, y)
     metrics = evaluate_songs(hold_songs, w) if hold_songs else {}
     if metrics:
         print(
