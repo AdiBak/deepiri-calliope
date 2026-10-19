@@ -1,0 +1,482 @@
+{
+  "corpus": "OpenScore Lieder",
+  "corpus_version": "v3.0.0",
+  "corpus_doi": "10.5281/zenodo.15450144",
+  "license": "CC0",
+  "n_mscx": 1356,
+  "n_parsed_songs": 1348,
+  "n_train_songs": 1078,
+  "n_holdout_songs": 270,
+  "n_train_notes": 78960,
+  "n_holdout_notes": 19779,
+  "split": {
+    "seed": 7,
+    "fraction": 0.2,
+    "unit": "song"
+  },
+  "bootstrap": {
+    "seed": 11,
+    "n": 1000,
+    "unit": "song"
+  },
+  "feature_std": {
+    "genre": 0.0,
+    "arrangement": 0.0
+  },
+  "baselines": {
+    "median_interval": 0,
+    "mode_interval": 0,
+    "median_beats": 0.5,
+    "beats_by_bin": {
+      "start": 0.5,
+      "early": 0.5,
+      "late": 0.5,
+      "end": 1.0
+    }
+  },
+  "models": [
+    {
+      "name": "Constant median",
+      "kind": "baseline",
+      "teacher_forced": {
+        "interval_mae": 1.4032559785631225,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.2791344355124121,
+        "degree_acc": 0.2791344355124121,
+        "interval_mae_macro": 1.4037158012259465,
+        "interval_mae_ci95": [
+          1.3597793346903346,
+          1.443845308746764
+        ],
+        "duration_mae_ci95": [
+          0.41590557363278124,
+          0.4754127381476163
+        ],
+        "contour_acc_ci95": [
+          0.26123018033795714,
+          0.2968548004916921
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.4032559785631225,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.2791344355124121,
+        "degree_acc": 0.1462156833004702,
+        "interval_mae_macro": 1.4037158012259465,
+        "interval_mae_ci95": [
+          1.358949410678015,
+          1.4460078477136746
+        ],
+        "duration_mae_ci95": [
+          0.4146258813139113,
+          0.47453957182155687
+        ],
+        "contour_acc_ci95": [
+          0.26121576187583445,
+          0.29644908910525475
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "Unigram mode",
+      "kind": "baseline",
+      "teacher_forced": {
+        "interval_mae": 1.4032559785631225,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.2791344355124121,
+        "degree_acc": 0.2791344355124121,
+        "interval_mae_macro": 1.4037158012259465,
+        "interval_mae_ci95": [
+          1.3597793346903346,
+          1.443845308746764
+        ],
+        "duration_mae_ci95": [
+          0.41590557363278124,
+          0.4754127381476163
+        ],
+        "contour_acc_ci95": [
+          0.26123018033795714,
+          0.2968548004916921
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.4032559785631225,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.2791344355124121,
+        "degree_acc": 0.1462156833004702,
+        "interval_mae_macro": 1.4037158012259465,
+        "interval_mae_ci95": [
+          1.358949410678015,
+          1.4460078477136746
+        ],
+        "duration_mae_ci95": [
+          0.4146258813139113,
+          0.47453957182155687
+        ],
+        "contour_acc_ci95": [
+          0.26121576187583445,
+          0.29644908910525475
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "Markov interval",
+      "kind": "baseline",
+      "teacher_forced": {
+        "interval_mae": 1.359826078163709,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.358966580716922,
+        "degree_acc": 0.2762525911320087,
+        "interval_mae_macro": 1.3592393512330385,
+        "interval_mae_ci95": [
+          1.321801920930761,
+          1.3948621991066958
+        ],
+        "duration_mae_ci95": [
+          0.41590557363278124,
+          0.4754127381476163
+        ],
+        "contour_acc_ci95": [
+          0.34477245293891273,
+          0.3721722712037524
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.396683351028869,
+        "duration_mae": 0.44483416755144345,
+        "contour_acc": 0.2865160018201122,
+        "degree_acc": 0.1720511653774205,
+        "interval_mae_macro": 1.3970984987339294,
+        "interval_mae_ci95": [
+          1.3525153217466397,
+          1.4392928276116745
+        ],
+        "duration_mae_ci95": [
+          0.4146258813139113,
+          0.47453957182155687
+        ],
+        "contour_acc_ci95": [
+          0.2687322590180676,
+          0.3042622802625907
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "Markov interval + phrase duration",
+      "kind": "baseline",
+      "teacher_forced": {
+        "interval_mae": 1.359826078163709,
+        "duration_mae": 0.4104037110066232,
+        "contour_acc": 0.358966580716922,
+        "degree_acc": 0.2762525911320087,
+        "interval_mae_macro": 1.3592393512330385,
+        "interval_mae_ci95": [
+          1.321801920930761,
+          1.3948621991066958
+        ],
+        "duration_mae_ci95": [
+          0.383968583464238,
+          0.44019815212475444
+        ],
+        "contour_acc_ci95": [
+          0.34477245293891273,
+          0.3721722712037524
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.396683351028869,
+        "duration_mae": 0.4104037110066232,
+        "contour_acc": 0.2865160018201122,
+        "degree_acc": 0.1720511653774205,
+        "interval_mae_macro": 1.3970984987339294,
+        "interval_mae_ci95": [
+          1.3525153217466397,
+          1.4392928276116745
+        ],
+        "duration_mae_ci95": [
+          0.38145635330285516,
+          0.43991271503084406
+        ],
+        "contour_acc_ci95": [
+          0.2687322590180676,
+          0.3042622802625907
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "MLP, all features",
+      "kind": "mlp",
+      "n_iter": 106,
+      "dropped": [],
+      "teacher_forced": {
+        "interval_mae": 1.3069417058496384,
+        "duration_mae": 0.40547322947051223,
+        "contour_acc": 0.4809646594873351,
+        "degree_acc": 0.2496081702816118,
+        "interval_mae_macro": 1.3082178606977752,
+        "interval_mae_ci95": [
+          1.2769023716711765,
+          1.33453791478245
+        ],
+        "duration_mae_ci95": [
+          0.38779746024012296,
+          0.4244318262286361
+        ],
+        "contour_acc_ci95": [
+          0.47171326278235043,
+          0.49178941451900265
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.402598715809697,
+        "duration_mae": 0.4045672823042559,
+        "contour_acc": 0.2999646089286617,
+        "degree_acc": 0.176045300571313,
+        "interval_mae_macro": 1.4009995037370069,
+        "interval_mae_ci95": [
+          1.357849486293118,
+          1.4446140339966436
+        ],
+        "duration_mae_ci95": [
+          0.38593364387338114,
+          0.4236774182862856
+        ],
+        "contour_acc_ci95": [
+          0.28222489798149153,
+          0.3168149754320964
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "MLP, lyric features removed",
+      "kind": "mlp",
+      "n_iter": 121,
+      "dropped": [
+        4,
+        5
+      ],
+      "teacher_forced": {
+        "interval_mae": 1.3040598614692351,
+        "duration_mae": 0.4246154379066242,
+        "contour_acc": 0.4793973406137823,
+        "degree_acc": 0.2526416906820365,
+        "interval_mae_macro": 1.306249185953076,
+        "interval_mae_ci95": [
+          1.2756440519885608,
+          1.3309447038735513
+        ],
+        "duration_mae_ci95": [
+          0.40658772951623734,
+          0.4431977688428442
+        ],
+        "contour_acc_ci95": [
+          0.4701845557738569,
+          0.4897569754255724
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.39926184336923,
+        "duration_mae": 0.42472901540249963,
+        "contour_acc": 0.28621264978006977,
+        "degree_acc": 0.17983720107184387,
+        "interval_mae_macro": 1.4010520440742302,
+        "interval_mae_ci95": [
+          1.3552681305042211,
+          1.4416352064083324
+        ],
+        "duration_mae_ci95": [
+          0.4064239000586158,
+          0.444180249037125
+        ],
+        "contour_acc_ci95": [
+          0.2686123652698863,
+          0.3040043985308122
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "MLP, phrase features removed",
+      "kind": "mlp",
+      "n_iter": 130,
+      "dropped": [
+        1,
+        2,
+        3,
+        11
+      ],
+      "teacher_forced": {
+        "interval_mae": 1.311441427776935,
+        "duration_mae": 0.42257587173715616,
+        "contour_acc": 0.4821780676475049,
+        "degree_acc": 0.2491025835482077,
+        "interval_mae_macro": 1.312829590241275,
+        "interval_mae_ci95": [
+          1.2822393524252158,
+          1.3388288517577156
+        ],
+        "duration_mae_ci95": [
+          0.40535839231116033,
+          0.4408720185224777
+        ],
+        "contour_acc_ci95": [
+          0.4729680440616364,
+          0.49252419457608665
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.3990596086758684,
+        "duration_mae": 0.4219686551964215,
+        "contour_acc": 0.28732494059355884,
+        "degree_acc": 0.17361848425097326,
+        "interval_mae_macro": 1.3998076936386623,
+        "interval_mae_ci95": [
+          1.3542224612202831,
+          1.4421832976374924
+        ],
+        "duration_mae_ci95": [
+          0.40303572035716356,
+          0.4420109480576371
+        ],
+        "contour_acc_ci95": [
+          0.269553133953796,
+          0.3054370742084908
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "MLP, previous degrees only",
+      "kind": "mlp",
+      "n_iter": 70,
+      "dropped": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        11
+      ],
+      "teacher_forced": {
+        "interval_mae": 1.3147783002174023,
+        "duration_mae": 0.4426404077070345,
+        "contour_acc": 0.47444259062642197,
+        "degree_acc": 0.25385509884220636,
+        "interval_mae_macro": 1.3175810497762785,
+        "interval_mae_ci95": [
+          1.284495240637202,
+          1.3435748207627065
+        ],
+        "duration_mae_ci95": [
+          0.42452884264703233,
+          0.4610826878064127
+        ],
+        "contour_acc_ci95": [
+          0.4647912824008517,
+          0.4848090993850133
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.4015369836695486,
+        "duration_mae": 0.4425620949148804,
+        "contour_acc": 0.28201627989281564,
+        "degree_acc": 0.16062490520248748,
+        "interval_mae_macro": 1.4016525156758612,
+        "interval_mae_ci95": [
+          1.356148423222694,
+          1.4443557826358049
+        ],
+        "duration_mae_ci95": [
+          0.4237533137171378,
+          0.46190632705269874
+        ],
+        "contour_acc_ci95": [
+          0.2640749051969417,
+          0.2998365016393736
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    },
+    {
+      "name": "MLP + cadence teacher",
+      "kind": "mlp",
+      "n_iter": 104,
+      "dropped": [],
+      "teacher_forced": {
+        "interval_mae": 1.3015319278022144,
+        "duration_mae": 0.40532734307970475,
+        "contour_acc": 0.47965013398048434,
+        "degree_acc": 0.2532989534354618,
+        "interval_mae_macro": 1.3029348484476242,
+        "interval_mae_ci95": [
+          1.2726010237350693,
+          1.3310381856355524
+        ],
+        "duration_mae_ci95": [
+          0.38776943634119515,
+          0.42325655003288387
+        ],
+        "contour_acc_ci95": [
+          0.4699962380934248,
+          0.49074548063965273
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      },
+      "rollout": {
+        "interval_mae": 1.4015369836695486,
+        "duration_mae": 0.40436891972794425,
+        "contour_acc": 0.29440315486121643,
+        "degree_acc": 0.17766317811820617,
+        "interval_mae_macro": 1.40105275554545,
+        "interval_mae_ci95": [
+          1.3565313609786904,
+          1.44336928312804
+        ],
+        "duration_mae_ci95": [
+          0.3858021151009398,
+          0.4230753336157134
+        ],
+        "contour_acc_ci95": [
+          0.27686439328975565,
+          0.31167121993306873
+        ],
+        "n_notes": 19779,
+        "n_songs": 270
+      }
+    }
+  ]
+}
